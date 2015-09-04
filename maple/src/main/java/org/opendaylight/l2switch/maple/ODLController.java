@@ -202,6 +202,9 @@ public class ODLController implements DataChangeListener,
       .getId()
       .getValue();
 
+    if (portID.contains(LOCAL_PORT_STR))
+      return;
+
     int switchNum = switchStrToInt(portID);
     int portNum = portStrToInt(portID);
 
