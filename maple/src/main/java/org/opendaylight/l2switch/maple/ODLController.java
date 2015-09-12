@@ -105,6 +105,7 @@ public class ODLController implements DataChangeListener,
   private Map<Integer, MacAddress> portToMacAddress;
 
   private static final String LOCAL_PORT_STR = "LOCAL";
+  private static final int MAX_PORTS_PER_SWITCH = 256;
 
   /* Given from Activator. */
 
@@ -136,6 +137,8 @@ public class ODLController implements DataChangeListener,
       .getId()
       .getValue();
 
+    System.out.println("[Down] PortID = " + portID);
+
     if (portID.contains(LOCAL_PORT_STR))
       return;
 
@@ -143,7 +146,7 @@ public class ODLController implements DataChangeListener,
     this.portToNodeConnectorRef.remove(portNum);
     this.maple.portDown(portNum);
 
-    System.out.println("NodeConnectorRef " + notification.getNodeConnectorRef());
+    System.out.println("[Down] NodeConnectorRef " + notification.getNodeConnectorRef());
   }
 
   @Override
@@ -156,6 +159,8 @@ public class ODLController implements DataChangeListener,
       .getId()
       .getValue();
 
+    System.out.println("[Up] PortID = " + portID);
+
     if (portID.contains(LOCAL_PORT_STR))
       return;
 
@@ -163,17 +168,17 @@ public class ODLController implements DataChangeListener,
     this.portToNodeConnectorRef.put(portNum, ncr);
     this.maple.portUp(portNum);
 
-    System.out.println("NodeConnectorRef " + notification.getNodeConnectorRef());
+    System.out.println("[Up] NodeConnectorRef " + notification.getNodeConnectorRef());
   }
 
   @Override
   public void onNodeRemoved(NodeRemoved notification) {
-    System.out.println("NodeRef " + notification.getNodeRef());
+    System.out.println("[Down] NodeRef " + notification.getNodeRef());
   }
 
   @Override
   public void onNodeUpdated(NodeUpdated notification) {
-    System.out.println("NodeRef " + notification.getNodeRef());
+    System.out.println("[Up] NodeRef " + notification.getNodeRef());
   }
 
   @Override
@@ -213,7 +218,6 @@ public class ODLController implements DataChangeListener,
 
     this.portToMacAddress.put(portNum, srcMac);
 
-    System.out.println("Mapping portNum "+portNum+" to NodeConnectorRef. ");
     synchronized(this) {
       this.maple.handlePacket(data, switchNum, portNum);
     }
@@ -225,8 +229,8 @@ public class ODLController implements DataChangeListener,
   }
 
   private static int portStrToInt(String portStr) {
-    return Integer.parseInt(portStr.substring(
-      portStr.lastIndexOf(':') + 1));
+    return switchStrToInt(portStr) * MAX_PORTS_PER_SWITCH +
+      Integer.parseInt(portStr.substring(portStr.lastIndexOf(':') + 1));
   }
 
   /**
@@ -312,11 +316,11 @@ public class ODLController implements DataChangeListener,
 
   @Override
   public void sendPacket(byte[] data, int inSwitch, int inPort, int... ports) {
+    System.out.println("inSwitch: "+inSwitch+";");
+    System.out.println("\tinPort: "+inPort+";");
     for (int i = 0; i < ports.length; i++) {
-      NodeConnectorRef ncRef = PacketUtils.createNodeConnRef(
-        nodePath,
-        nodePath.firstKeyOf(Node.class, NodeKey.class),
-        ports[i] + "");
+      System.out.println("\toutPort"+i+": "+ports[i]+";");
+      NodeConnectorRef ncRef = ingressPlaceHolder(ports[i]);
       sendPacketOut(data, ingressPlaceHolder(inPort), ncRef);
     }
   }
