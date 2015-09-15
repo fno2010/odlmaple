@@ -9,78 +9,68 @@
 package org.opendaylight.maple;
 
 
+import org.maple.core.Action;
 import org.maple.core.Controller;
+import org.maple.core.Drop;
 import org.maple.core.MapleSystem;
+import org.maple.core.Punt;
 import org.maple.core.Rule;
 import org.maple.core.ToPorts;
-import org.maple.core.Drop;
-import org.maple.core.Punt;
-import org.maple.core.Action;
 import org.maple.core.TraceItem;
-
-import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeConnectorUpdatedBuilder;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.Nodes;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicLong;
-
-import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.match.EthernetMatchBuilder;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.ethernet.match.fields.EthernetDestinationBuilder;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.ethernet.match.fields.EthernetSourceBuilder;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.types.rev131026.flow.MatchBuilder;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.l2.types.rev130827.EtherType;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.ethernet.match.fields.EthernetTypeBuilder;
-
+import org.opendaylight.controller.md.sal.binding.api.DataChangeListener;
+import org.opendaylight.controller.md.sal.common.api.data.AsyncDataChangeEvent;
+import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.inet.types.rev100924.Uri;
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.yang.types.rev100924.MacAddress;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.FlowId;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.FlowCapableNode;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.types.rev131026.flow.Match;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.FlowId;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.tables.Table;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.tables.TableKey;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.tables.table.Flow;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.tables.table.FlowBuilder;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.tables.table.FlowKey;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.AddFlowInputBuilder;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.AddFlowOutput;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.FlowTableRef;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.RemoveFlowInputBuilder;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.RemoveFlowOutput;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.SalFlowService;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.types.rev131026.FlowRef;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.types.rev131026.flow.Match;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.types.rev131026.flow.MatchBuilder;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeConnectorId;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeConnectorRef;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeConnectorRemoved;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeConnectorUpdated;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeId;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeRef;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeRemoved;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeUpdated;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.OpendaylightInventoryListener;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.node.NodeConnector;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.node.NodeConnectorKey;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.nodes.Node;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.nodes.NodeKey;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.l2.types.rev130827.EtherType;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.ethernet.match.fields.EthernetDestinationBuilder;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.ethernet.match.fields.EthernetSourceBuilder;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.ethernet.match.fields.EthernetTypeBuilder;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.model.match.types.rev131026.match.EthernetMatchBuilder;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.packet.service.rev130709.PacketProcessingListener;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.packet.service.rev130709.PacketProcessingService;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.packet.service.rev130709.PacketReceived;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.packet.service.rev130709.TransmitPacketInput;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.packet.service.rev130709.TransmitPacketInputBuilder;
+import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
+import org.opendaylight.yangtools.yang.common.RpcResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.SalFlowService;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.AddFlowOutput;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.AddFlowInputBuilder;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.RemoveFlowOutput;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.RemoveFlowInputBuilder;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.types.rev131026.FlowRef;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.FlowTableRef;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.inet.types.rev100924.Uri;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.Future;
-import org.opendaylight.yangtools.yang.common.RpcResult;
-
-import org.opendaylight.yangtools.yang.binding.DataObject;
-import org.opendaylight.controller.md.sal.binding.api.DataChangeListener;
-import org.opendaylight.controller.md.sal.common.api.data.AsyncDataChangeEvent;
-
-import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeConnectorRemoved;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeConnectorUpdated;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeRemoved;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.NodeUpdated;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.inventory.rev130819.OpendaylightInventoryListener;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class ODLController implements DataChangeListener,
                                       OpendaylightInventoryListener,
@@ -104,6 +94,7 @@ public class ODLController implements DataChangeListener,
   private Map<Integer, MacAddress> portToMacAddress;
 
   private static final String LOCAL_PORT_STR = "LOCAL";
+  private static final int MAX_PORTS_PER_SWITCH = 256;
 
   /* Given from Activator. */
 
@@ -142,7 +133,7 @@ public class ODLController implements DataChangeListener,
     this.portToNodeConnectorRef.remove(portNum);
     this.maple.portDown(portNum);
 
-    LOG.info("NodeConnectorRef " + notification.getNodeConnectorRef());
+    LOG.info("Removing NodeConnectorRef " + notification.getNodeConnectorRef());
   }
 
   @Override
@@ -162,17 +153,17 @@ public class ODLController implements DataChangeListener,
     this.portToNodeConnectorRef.put(portNum, ncr);
     this.maple.portUp(portNum);
 
-    LOG.info("NodeConnectorRef " + notification.getNodeConnectorRef());
+    LOG.info("Updating NodeConnectorRef " + notification.getNodeConnectorRef());
   }
 
   @Override
   public void onNodeRemoved(NodeRemoved notification) {
-    LOG.info("NodeRef " + notification.getNodeRef());
+    LOG.info("Removing NodeRef " + notification.getNodeRef());
   }
 
   @Override
   public void onNodeUpdated(NodeUpdated notification) {
-    LOG.info("NodeRef " + notification.getNodeRef());
+    LOG.info("Updating NodeRef " + notification.getNodeRef());
   }
 
   @Override
@@ -201,6 +192,9 @@ public class ODLController implements DataChangeListener,
       .getId()
       .getValue();
 
+    if (portID.contains(LOCAL_PORT_STR))
+      return;
+
     int switchNum = switchStrToInt(portID);
     int portNum = portStrToInt(portID);
 
@@ -221,8 +215,8 @@ public class ODLController implements DataChangeListener,
   }
 
   private static int portStrToInt(String portStr) {
-    return Integer.parseInt(portStr.substring(
-      portStr.lastIndexOf(':') + 1));
+    return switchStrToInt(portStr) * MAX_PORTS_PER_SWITCH +
+      Integer.parseInt(portStr.substring( portStr.lastIndexOf(':') + 1));
   }
 
   /**
@@ -248,7 +242,7 @@ public class ODLController implements DataChangeListener,
     LOG.debug("stop() <--");
   }
  
-  private NodeConnectorRef ingressPlaceHolder(int portNum) {
+  private NodeConnectorRef portPlaceHolder(int portNum) {
     if (this.portToNodeConnectorRef.containsKey(portNum))
       return this.portToNodeConnectorRef.get(portNum);
     else {
@@ -309,11 +303,7 @@ public class ODLController implements DataChangeListener,
   @Override
   public void sendPacket(byte[] data, int inSwitch, int inPort, int... ports) {
     for (int i = 0; i < ports.length; i++) {
-      NodeConnectorRef ncRef = PacketUtils.createNodeConnRef(
-        nodePath,
-        nodePath.firstKeyOf(Node.class, NodeKey.class),
-        ports[i] + "");
-      sendPacketOut(data, ingressPlaceHolder(inPort), ncRef);
+      sendPacketOut(data, portPlaceHolder(inPort), portPlaceHolder(ports[i]));
     }
   }
 
