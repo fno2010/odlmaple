@@ -15,6 +15,8 @@ import org.maple.core.Drop;
 import org.maple.core.MapleSystem;
 import org.maple.core.Punt;
 import org.maple.core.Rule;
+import org.maple.core.Switch;
+import org.maple.core.SwitchPort;
 import org.maple.core.ToPorts;
 import org.maple.core.TraceItem;
 import org.opendaylight.controller.md.sal.binding.api.DataChangeListener;
@@ -66,7 +68,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.LinkedList;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Future;
@@ -90,7 +92,7 @@ public class ODLController implements DataChangeListener,
   private InstanceIdentifier<Node> nodePath;
   private InstanceIdentifier<Table> tablePath;
 
-  private Map<Integer, NodeConnectorRef> portToNodeConnectorRef;
+  private Map<SwitchPort, NodeConnectorRef> portToNodeConnectorRef;
   private Map<Integer, MacAddress> portToMacAddress;
 
   private static final String LOCAL_PORT_STR = "LOCAL";
@@ -129,7 +131,7 @@ public class ODLController implements DataChangeListener,
     if (portID.contains(LOCAL_PORT_STR))
       return;
 
-    int portNum = portStrToInt(portID);
+    SwitchPort portNum = portIDToPort(portID);
     this.portToNodeConnectorRef.remove(portNum);
     this.maple.portDown(portNum);
 
@@ -149,7 +151,7 @@ public class ODLController implements DataChangeListener,
     if (portID.contains(LOCAL_PORT_STR))
       return;
 
-    int portNum = portStrToInt(portID);
+    SwitchPort portNum = portIDToPort(portID);
     this.portToNodeConnectorRef.put(portNum, ncr);
     this.maple.portUp(portNum);
 
@@ -176,9 +178,9 @@ public class ODLController implements DataChangeListener,
     LOG.debug("Received packet via match: {}", packet.getMatch());
 
     // read src MAC and dst MAC
-    byte[] dstMacRaw = PacketUtils.extractDstMac(packet.getPayload());
-    byte[] srcMacRaw = PacketUtils.extractSrcMac(packet.getPayload());
-    byte[] etherType = PacketUtils.extractEtherType(packet.getPayload());
+//    byte[] dstMacRaw = PacketUtils.extractDstMac(packet.getPayload());
+//    byte[] srcMacRaw = PacketUtils.extractSrcMac(packet.getPayload());
+//    byte[] etherType = PacketUtils.extractEtherType(packet.getPayload());
 
     NodeConnectorRef ingress = packet.getIngress();
 
@@ -195,13 +197,13 @@ public class ODLController implements DataChangeListener,
     if (portID.contains(LOCAL_PORT_STR))
       return;
 
-    int switchNum = switchStrToInt(portID);
-    int portNum = portStrToInt(portID);
+    Switch switchNum = portIDToSwitch(portID);
+    SwitchPort portNum = portIDToPort(portID);
 
-    MacAddress dstMac = PacketUtils.rawMacToMac(dstMacRaw);
-    MacAddress srcMac = PacketUtils.rawMacToMac(srcMacRaw);
+//    MacAddress dstMac = PacketUtils.rawMacToMac(dstMacRaw);
+//    MacAddress srcMac = PacketUtils.rawMacToMac(srcMacRaw);
 
-    this.portToMacAddress.put(portNum, srcMac);
+//    this.portToMacAddress.put(portNum, srcMac);
 
     LOG.info("Mapping portNum "+portNum+" to NodeConnectorRef. ");
     synchronized(this) {
@@ -209,14 +211,21 @@ public class ODLController implements DataChangeListener,
     }
   }
 
-  private static int switchStrToInt(String switchStr) {
-    return Integer.parseInt(switchStr.substring(
-      switchStr.indexOf(':') + 1, switchStr.lastIndexOf(':')));
+  private static int portIDToSwitchNum(String portID) {
+    return Integer.parseInt(portID.substring(
+      portID.indexOf(':') + 1, portID.lastIndexOf(':')));
   }
 
-  private static int portStrToInt(String portStr) {
-    return switchStrToInt(portStr) * MAX_PORTS_PER_SWITCH +
-      Integer.parseInt(portStr.substring( portStr.lastIndexOf(':') + 1));
+  private static int portIDToPortNum(String portID) {
+    return Integer.parseInt(portID.substring(portID.lastIndexOf(':') + 1));
+  }
+
+  private static Switch portIDToSwitch(String portID) {
+    return new Switch(portIDToSwitchNum(portID));
+  }
+
+  private static SwitchPort portIDToPort(String portID) {
+    return new SwitchPort(portIDToSwitchNum(portID), portIDToPortNum(portID));
   }
 
   /**
@@ -242,7 +251,7 @@ public class ODLController implements DataChangeListener,
     LOG.debug("stop() <--");
   }
  
-  private NodeConnectorRef portPlaceHolder(int portNum) {
+  private NodeConnectorRef portPlaceHolder(SwitchPort portNum) {
     if (this.portToNodeConnectorRef.containsKey(portNum))
       return this.portToNodeConnectorRef.get(portNum);
     else {
@@ -301,7 +310,7 @@ public class ODLController implements DataChangeListener,
   }
 
   @Override
-  public void sendPacket(byte[] data, int inSwitch, int inPort, int... ports) {
+  public void sendPacket(byte[] data, Switch inSwitch, SwitchPort inPort, SwitchPort... ports) {
     for (int i = 0; i < ports.length; i++) {
       sendPacketOut(data, portPlaceHolder(inPort), portPlaceHolder(ports[i]));
     }
@@ -397,7 +406,7 @@ public class ODLController implements DataChangeListener,
     return m;
   }
 
-  private void installPuntRule(Rule rule, int outSwitch) {
+  private void installPuntRule(Rule rule, Switch outSwitch) {
     InstanceIdentifier<Table> tableId = getTableInstanceId(this.nodePath);
     InstanceIdentifier<Flow> flowId = getFlowInstanceId(tableId);
 
@@ -409,7 +418,7 @@ public class ODLController implements DataChangeListener,
     result = addFlow(this.nodePath, tableId, flowId, flow);
   }
 
-  private void installToPortRule(Rule rule, int outSwitch, int[] outPorts) {
+  private void installToPortRule(Rule rule, Switch outSwitch, SwitchPort[] outPorts) {
 
     NodeConnectorRef dstPorts[] = new NodeConnectorRef[outPorts.length];
     for (int i = 0; i < outPorts.length; i++) {
@@ -432,21 +441,21 @@ public class ODLController implements DataChangeListener,
   }
 
   @Override
-  public void installRules(LinkedList<Rule> rules, int... outSwitches) {
+  public void installRules(HashSet<Rule> rules, Switch... outSwitches) {
     for (Rule rule : rules) {
       Action a = rule.action;
       if (a instanceof ToPorts) {
-        int[] outPorts = ((ToPorts) a).portIDs;
-        for (int sw : outSwitches) {
+        SwitchPort[] outPorts = ((ToPorts) a).portIDs;
+        for (Switch sw : outSwitches) {
           installToPortRule(rule, sw, outPorts);
         }
       } else if (a instanceof Drop) {
-        int[] outPorts = new int[0];
-        for (int sw : outSwitches) {
+        SwitchPort[] outPorts = new SwitchPort[0];
+        for (Switch sw : outSwitches) {
           installToPortRule(rule, sw, outPorts);
         }
       } else if (a instanceof Punt) {
-        for (int sw : outSwitches) {
+        for (Switch sw : outSwitches) {
           installPuntRule(rule, sw);
         }
       } else {
@@ -455,7 +464,7 @@ public class ODLController implements DataChangeListener,
     }
   }
 
-  private void removePuntRule(Rule rule, int outSwitch) {
+  private void removePuntRule(Rule rule, Switch outSwitch) {
     InstanceIdentifier<Table> tableId = getTableInstanceId(this.nodePath);
     InstanceIdentifier<Flow> flowId = getFlowInstanceId(tableId);
 
@@ -467,7 +476,7 @@ public class ODLController implements DataChangeListener,
     result = removeFlow(this.nodePath, tableId, flowId, flow);
   }
 
-  private void removeToPortRule(Rule rule, int outSwitch, int[] outPorts) {
+  private void removeToPortRule(Rule rule, Switch outSwitch, SwitchPort[] outPorts) {
 
     NodeConnectorRef dstPorts[] = new NodeConnectorRef[outPorts.length];
     for (int i = 0; i < outPorts.length; i++) {
@@ -490,21 +499,21 @@ public class ODLController implements DataChangeListener,
   }
 
   @Override
-  public void deleteRules(LinkedList<Rule> rules, int... outSwitches) {
+  public void deleteRules(HashSet<Rule> rules, Switch... outSwitches) {
     for (Rule rule : rules) {
       Action a = rule.action;
       if (a instanceof ToPorts) {
-        int[] outPorts = ((ToPorts) a).portIDs;
-        for (int sw : outSwitches) {
+        SwitchPort[] outPorts = ((ToPorts) a).portIDs;
+        for (Switch sw : outSwitches) {
           removeToPortRule(rule, sw, outPorts);
         }
       } else if (a instanceof Drop) {
-        int[] outPorts = new int[0];
-        for (int sw : outSwitches) {
+        SwitchPort[] outPorts = new SwitchPort[0];
+        for (Switch sw : outSwitches) {
           removeToPortRule(rule, sw, outPorts);
         }
       } else if (a instanceof Punt) {
-        for (int sw : outSwitches) {
+        for (Switch sw : outSwitches) {
           removePuntRule(rule, sw);
         }
       } else {
