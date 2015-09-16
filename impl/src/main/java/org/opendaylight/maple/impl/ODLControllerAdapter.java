@@ -132,7 +132,7 @@ public class ODLControllerAdapter implements Controller,
         if (this.portToNodeConnectorRef.containsKey(portNum))
             return this.portToNodeConnectorRef.get(portNum);
         else {
-            String msg = "portNum " + portNum + " does not exist in map";
+            String msg = "port [" + portNum + "] does not exist in map";
             throw new IllegalArgumentException(msg);
         }
     }
@@ -310,10 +310,9 @@ public class ODLControllerAdapter implements Controller,
 
     @Override
     public void sendPacket(byte[] data, Switch inSwitch, SwitchPort inPort, SwitchPort... ports) {
-        System.out.println("inSwitch: "+inSwitch+";");
-        System.out.println("\tinPort: " + inPort + ";");
+        LOG.info("inPort: [" + inPort.toString() + "];");
         for (int i = 0; i < ports.length; i++) {
-            System.out.println("\toutPort"+i+": "+ports[i]+";");
+            LOG.info("\toutPort"+i+": ["+ports[i].toString()+"];");
             sendPacketOut(data, portPlaceHolder(inPort), portPlaceHolder(ports[i]));
         }
     }

@@ -9,11 +9,11 @@ package org.opendaylight.maple.impl;
 
 import org.opendaylight.controller.md.sal.binding.api.DataBroker;
 import org.opendaylight.controller.md.sal.binding.api.DataChangeListener;
-import org.opendaylight.controller.md.sal.binding.api.NotificationService;
 import org.opendaylight.controller.md.sal.common.api.data.AsyncDataBroker;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.sal.binding.api.BindingAwareBroker.ProviderContext;
 import org.opendaylight.controller.sal.binding.api.BindingAwareProvider;
+import org.opendaylight.controller.sal.binding.api.NotificationProviderService;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.FlowCapableNode;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.inventory.rev130819.tables.Table;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.flow.service.rev130819.SalFlowService;
@@ -27,6 +27,7 @@ import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.
 import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.rev131021.network.topology.topology.Link;
 import org.opendaylight.yangtools.concepts.ListenerRegistration;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
+import org.opendaylight.yangtools.yang.binding.NotificationListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,7 @@ public class ODLMapleProvider implements BindingAwareProvider, AutoCloseable {
 
     private ODLControllerAdapter controller;
 
-    private ListenerRegistration<ODLControllerAdapter> notificationListenerReg;
+    private ListenerRegistration<NotificationListener> notificationListenerReg;
     private ListenerRegistration<DataChangeListener> switchChangeListenerReg;
     private ListenerRegistration<DataChangeListener> linkChangeListenerReg;
 
@@ -52,8 +53,8 @@ public class ODLMapleProvider implements BindingAwareProvider, AutoCloseable {
 
         DataBroker db = session.getSALService(DataBroker.class);
 
-        NotificationService ns = session.getSALService(NotificationService.class);
-        this.notificationListenerReg = ns.registerNotificationListener(this.controller);
+        NotificationProviderService nps = session.getSALService(NotificationProviderService.class);
+        this.notificationListenerReg = nps.registerNotificationListener(this.controller);
 
         this.switchChangeListenerReg = db.registerDataChangeListener(
                 LogicalDatastoreType.OPERATIONAL,
