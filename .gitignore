@@ -18,8 +18,7 @@ target
 .settings
 MANIFEST.MF
 xtend-gen
-yang-gen-code
-yang-gen-config
+yang-gen-*
 .externalToolBuilders
 maven-eclipse.xml
 .DS_Store
