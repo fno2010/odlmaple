@@ -84,7 +84,7 @@ public class ODLControllerAdapter implements Controller,
     private MapleSystem maple;
     private PacketProcessingService pps;
     private SalFlowService fs;
-    private Map<SwitchPort, NodeConnectorRef> portToNodeConnectorRef;
+    private Map<Integer, NodeConnectorRef> portToNodeConnectorRef;
     private InstanceIdentifier<Node> nodePath;
     private InstanceIdentifier<Table> tablePath;
     private short flowTableId = 0;
@@ -129,8 +129,8 @@ public class ODLControllerAdapter implements Controller,
     }
 
     private NodeConnectorRef portPlaceHolder(SwitchPort portNum) {
-        if (this.portToNodeConnectorRef.containsKey(portNum))
-            return this.portToNodeConnectorRef.get(portNum);
+        if (this.portToNodeConnectorRef.containsKey(portNum.hashCode()))
+            return this.portToNodeConnectorRef.get(portNum.hashCode());
         else {
             String msg = "port [" + portNum + "] does not exist in map";
             throw new IllegalArgumentException(msg);
@@ -153,7 +153,7 @@ public class ODLControllerAdapter implements Controller,
 
         NodeConnectorRef dstPorts[] = new NodeConnectorRef[outPorts.length];
         for (int i = 0; i < outPorts.length; i++) {
-            dstPorts[i] = this.portToNodeConnectorRef.get(outPorts[i]);
+            dstPorts[i] = this.portToNodeConnectorRef.get(outPorts[i].hashCode());
             if (dstPorts[i] == null) {
                 System.out.println("!!!!!!!! WARNING - NOT INSTALLING RULE: " + rule + "!!!!!!!!!!!!!!");
                 return;
@@ -187,7 +187,7 @@ public class ODLControllerAdapter implements Controller,
 
         NodeConnectorRef dstPorts[] = new NodeConnectorRef[outPorts.length];
         for (int i = 0; i < outPorts.length; i++) {
-            dstPorts[i] = this.portToNodeConnectorRef.get(outPorts[i]);
+            dstPorts[i] = this.portToNodeConnectorRef.get(outPorts[i].hashCode());
             if (dstPorts[i] == null) {
                 System.out.println("!!!!!!!! WARNING - NOT INSTALLING RULE: " + rule + "!!!!!!!!!!!!!!");
                 return;
@@ -443,7 +443,7 @@ public class ODLControllerAdapter implements Controller,
             return;
 
         SwitchPort portNum = portIDToPort(portID);
-        this.portToNodeConnectorRef.remove(portNum);
+        this.portToNodeConnectorRef.remove(portNum.hashCode());
         this.maple.portDown(portNum);
 
         LOG.info("[Down] NodeConnectorRef " + notification.getNodeConnectorRef());
@@ -465,7 +465,7 @@ public class ODLControllerAdapter implements Controller,
             return;
 
         SwitchPort portNum = portIDToPort(portID);
-        this.portToNodeConnectorRef.put(portNum, ncr);
+        this.portToNodeConnectorRef.put(portNum.hashCode(), ncr);
         this.maple.portUp(portNum);
 
         LOG.info("[Up] NodeConnectorRef " + notification.getNodeConnectorRef());
