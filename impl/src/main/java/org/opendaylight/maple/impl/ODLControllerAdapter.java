@@ -13,8 +13,6 @@ import org.maple.core.Drop;
 import org.maple.core.MapleSystem;
 import org.maple.core.Punt;
 import org.maple.core.Rule;
-import org.maple.core.Switch;
-import org.maple.core.SwitchPort;
 import org.maple.core.ToPorts;
 import org.maple.core.TraceItem;
 import org.opendaylight.controller.md.sal.binding.api.DataChangeListener;
@@ -70,6 +68,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
@@ -120,24 +119,24 @@ public class ODLControllerAdapter implements Controller,
         return Integer.parseInt(portID.substring(portID.lastIndexOf(':') + 1));
     }
 
-    private static Switch portIDToSwitch(String portID) {
-        return new Switch(portIDToSwitchNum(portID));
+    private static int switchPortHashCode(long switchNum, int portNum) {
+        final int prime = 5557;
+        int result = 1;
+        result = prime * result + (int) switchNum;
+        result = prime * result + portNum;
+        return result;
     }
 
-    private static SwitchPort portIDToPort(String portID) {
-        return new SwitchPort(portIDToSwitchNum(portID), portIDToPortNum(portID));
-    }
-
-    private NodeConnectorRef portPlaceHolder(SwitchPort portNum) {
-        if (this.portToNodeConnectorRef.containsKey(portNum.hashCode()))
-            return this.portToNodeConnectorRef.get(portNum.hashCode());
+    private NodeConnectorRef portPlaceHolder(int hashCode) {
+        if (this.portToNodeConnectorRef.containsKey(hashCode))
+            return this.portToNodeConnectorRef.get(hashCode);
         else {
-            String msg = "port [" + portNum + "] does not exist in map";
+            String msg = "port [" + hashCode + "] does not exist in map";
             throw new IllegalArgumentException(msg);
         }
     }
 
-    private void installPuntRule(Rule rule, Switch outSwitch) {
+    private void installPuntRule(Rule rule, int outSwitch) {
         InstanceIdentifier<Table> tableId = getTableInstanceId(this.nodePath);
         InstanceIdentifier<Flow> flowId = getFlowInstanceId(tableId);
 
@@ -149,11 +148,11 @@ public class ODLControllerAdapter implements Controller,
         result = addFlow(this.nodePath, tableId, flowId, flow);
     }
 
-    private void installToPortRule(Rule rule, Switch outSwitch, SwitchPort[] outPorts) {
+    private void installToPortRule(Rule rule, int outSwitch, int[] outPorts) {
 
         NodeConnectorRef dstPorts[] = new NodeConnectorRef[outPorts.length];
         for (int i = 0; i < outPorts.length; i++) {
-            dstPorts[i] = this.portToNodeConnectorRef.get(outPorts[i].hashCode());
+            dstPorts[i] = this.portToNodeConnectorRef.get(switchPortHashCode(outSwitch, outPorts[i]));
             if (dstPorts[i] == null) {
                 System.out.println("!!!!!!!! WARNING - NOT INSTALLING RULE: " + rule + "!!!!!!!!!!!!!!");
                 return;
@@ -171,7 +170,7 @@ public class ODLControllerAdapter implements Controller,
         result = addFlow(this.nodePath, tableId, flowId, flow);
     }
 
-    private void removePuntRule(Rule rule, Switch outSwitch) {
+    private void removePuntRule(Rule rule, int outSwitch) {
         InstanceIdentifier<Table> tableId = getTableInstanceId(this.nodePath);
         InstanceIdentifier<Flow> flowId = getFlowInstanceId(tableId);
 
@@ -183,11 +182,11 @@ public class ODLControllerAdapter implements Controller,
         result = removeFlow(this.nodePath, tableId, flowId, flow);
     }
 
-    private void removeToPortRule(Rule rule, Switch outSwitch, SwitchPort[] outPorts) {
+    private void removeToPortRule(Rule rule, int outSwitch, int[] outPorts) {
 
         NodeConnectorRef dstPorts[] = new NodeConnectorRef[outPorts.length];
         for (int i = 0; i < outPorts.length; i++) {
-            dstPorts[i] = this.portToNodeConnectorRef.get(outPorts[i].hashCode());
+            dstPorts[i] = this.portToNodeConnectorRef.get(switchPortHashCode(outSwitch, outPorts[i]));
             if (dstPorts[i] == null) {
                 System.out.println("!!!!!!!! WARNING - NOT INSTALLING RULE: " + rule + "!!!!!!!!!!!!!!");
                 return;
@@ -309,30 +308,32 @@ public class ODLControllerAdapter implements Controller,
     }
 
     @Override
-    public void sendPacket(byte[] data, Switch inSwitch, SwitchPort inPort, SwitchPort... ports) {
-        LOG.info("inPort: [" + inPort.toString() + "];");
+    public void sendPacket(byte[] data, int inSwitch, int inPort, int... ports) {
+        LOG.info("inPort: [" + inPort + "];");
         for (int i = 0; i < ports.length; i++) {
-            LOG.info("\toutPort"+i+": ["+ports[i].toString()+"];");
-            sendPacketOut(data, portPlaceHolder(inPort), portPlaceHolder(ports[i]));
+            LOG.info("\toutPort" + i + ": [" + ports[i] + "];");
+            sendPacketOut(data,
+                    portPlaceHolder(switchPortHashCode(inSwitch, inPort)),
+                    portPlaceHolder(switchPortHashCode(inSwitch, ports[i])));
         }
     }
 
     @Override
-    public void installRules(HashSet<Rule> rules, Switch... outSwitches) {
+    public void installRules(LinkedList<Rule> rules, int... outSwitches) {
         for (Rule rule : rules) {
             Action a = rule.action;
             if (a instanceof ToPorts) {
-                SwitchPort[] outPorts = ((ToPorts) a).portIDs;
-                for (Switch sw : outSwitches) {
+                int[] outPorts = ((ToPorts) a).portIDs;
+                for (int sw : outSwitches) {
                     installToPortRule(rule, sw, outPorts);
                 }
             } else if (a instanceof Drop) {
-                SwitchPort[] outPorts = new SwitchPort[0];
-                for (Switch sw : outSwitches) {
+                int[] outPorts = new int[0];
+                for (int sw : outSwitches) {
                     installToPortRule(rule, sw, outPorts);
                 }
             } else if (a instanceof Punt) {
-                for (Switch sw : outSwitches) {
+                for (int sw : outSwitches) {
                     installPuntRule(rule, sw);
                 }
             } else {
@@ -342,21 +343,21 @@ public class ODLControllerAdapter implements Controller,
     }
 
     @Override
-    public void deleteRules(HashSet<Rule> rules, Switch... outSwitches) {
+    public void deleteRules(LinkedList<Rule> rules, int... outSwitches) {
         for (Rule rule : rules) {
             Action a = rule.action;
             if (a instanceof ToPorts) {
-                SwitchPort[] outPorts = ((ToPorts) a).portIDs;
-                for (Switch sw : outSwitches) {
+                int[] outPorts = ((ToPorts) a).portIDs;
+                for (int sw : outSwitches) {
                     removeToPortRule(rule, sw, outPorts);
                 }
             } else if (a instanceof Drop) {
-                SwitchPort[] outPorts = new SwitchPort[0];
-                for (Switch sw : outSwitches) {
+                int[] outPorts = new int[0];
+                for (int sw : outSwitches) {
                     removeToPortRule(rule, sw, outPorts);
                 }
             } else if (a instanceof Punt) {
-                for (Switch sw : outSwitches) {
+                for (int sw : outSwitches) {
                     removePuntRule(rule, sw);
                 }
             } else {
@@ -419,8 +420,8 @@ public class ODLControllerAdapter implements Controller,
         if (portID.contains(LOCAL_PORT_STR))
             return;
 
-        Switch switchNum = portIDToSwitch(portID);
-        SwitchPort portNum = portIDToPort(portID);
+        int switchNum = portIDToSwitchNum(portID);
+        int portNum = portIDToPortNum(portID);
 
         synchronized(this) {
             this.maple.handlePacket(data, switchNum, portNum);
@@ -442,9 +443,10 @@ public class ODLControllerAdapter implements Controller,
         if (portID.contains(LOCAL_PORT_STR))
             return;
 
-        SwitchPort portNum = portIDToPort(portID);
-        this.portToNodeConnectorRef.remove(portNum.hashCode());
-        this.maple.portDown(portNum);
+        int switchNum = portIDToSwitchNum(portID);
+        int portNum = portIDToPortNum(portID);
+        this.portToNodeConnectorRef.remove(switchPortHashCode(switchNum, portNum));
+        this.maple.portDown(switchNum, portNum);
 
         LOG.info("[Down] NodeConnectorRef " + notification.getNodeConnectorRef());
     }
@@ -464,9 +466,10 @@ public class ODLControllerAdapter implements Controller,
         if (portID.contains(LOCAL_PORT_STR))
             return;
 
-        SwitchPort portNum = portIDToPort(portID);
-        this.portToNodeConnectorRef.put(portNum.hashCode(), ncr);
-        this.maple.portUp(portNum);
+        int switchNum = portIDToSwitchNum(portID);
+        int portNum = portIDToPortNum(portID);
+        this.portToNodeConnectorRef.put(switchPortHashCode(switchNum, portNum), ncr);
+        this.maple.portUp(switchNum, portNum);
 
         LOG.info("[Up] NodeConnectorRef " + notification.getNodeConnectorRef());
     }
