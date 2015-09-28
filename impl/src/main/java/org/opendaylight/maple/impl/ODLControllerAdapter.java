@@ -132,7 +132,8 @@ public class ODLControllerAdapter implements Controller,
             return this.portToNodeConnectorRef.get(hashCode);
         else {
             String msg = "port [" + hashCode + "] does not exist in map";
-            throw new IllegalArgumentException(msg);
+            //throw new IllegalArgumentException(msg); //FIXME: temporal fix. Remove this part if broadcast is supported.
+            return null;
         }
     }
 
@@ -312,9 +313,12 @@ public class ODLControllerAdapter implements Controller,
         LOG.info("inPort: [" + inPort + "];");
         for (int i = 0; i < ports.length; i++) {
             LOG.info("\toutPort" + i + ": [" + ports[i] + "];");
+            NodeConnectorRef outPort = portPlaceHolder(switchPortHashCode(inSwitch, ports[i]));
+            if (outPort == null)
+              continue;
             sendPacketOut(data,
                     portPlaceHolder(switchPortHashCode(inSwitch, inPort)),
-                    portPlaceHolder(switchPortHashCode(inSwitch, ports[i])));
+                    outPort);
         }
     }
 
